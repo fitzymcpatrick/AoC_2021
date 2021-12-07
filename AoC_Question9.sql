@@ -76,8 +76,11 @@ WHERE (
 		OR LTRIM(RTRIM(RIGHT(pointA,LEN(pointA) - PATINDEX('% %',pointA)))) = LTRIM(RTRIM(RIGHT(pointB,LEN(pointB) - PATINDEX('% %',pointB))))
 	)
 
+--Need to get unique list of points, if two lines overlap each other then they also intersect with another line, when all three hit the same point it should count as only 1 point of intersection
+SELECT * FROM #HVlines WHERE rownum IN (61,441,413,159,4,107,419,81,115,102,237,188)
 
---Find intersecting lines
+
+--Create temp table for finding all of the single intersecting points
 ;WITH MAIN AS (
 	SELECT H1.*
 		, H1.line.STIntersection(H2.line).ToString() AS [intersection]
@@ -99,6 +102,9 @@ FROM MAIN
 WHERE uniq = 1
 	AND intersection LIKE 'POINT%'
 
+--SELECT COUNT(DISTINCT pointsAB) FROM #UniquePoints
+--2703
+
 
 
 --Deal with linestrings, need to extract them and then build a list of all points between A and B of the linestring
@@ -112,18 +118,22 @@ WHERE uniq = 1
 		JOIN #HVlines H2 ON H1.line.STIntersects(H2.line) = 1
 	WHERE H1.rownum <> H2.rownum
 )
-SELECT 	intersection
-	, REPLACE(RIGHT(intersection, LEN(intersection)-12),')','')
+SELECT intersection
 	, LEFT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))-1) AS [pointA]
 	, LEFT(LEFT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))-1),PATINDEX('% %',LEFT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))-1))-1) AS [pointAx]
-	--,  AS [pointAy]
+	, RIGHT(LEFT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))-1),LEN(LEFT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))-1)) - PATINDEX('% %',LEFT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))-1))) AS [pointAy]
 	, LTRIM(RTRIM(RIGHT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),LEN(REPLACE(RIGHT(intersection, LEN(intersection)-12),')','')) - PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))))) AS [pointB]
-	--, () AS [pointBx]
-	--, () AS [pointBy]
+	, LEFT(LTRIM(RTRIM(RIGHT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),LEN(REPLACE(RIGHT(intersection, LEN(intersection)-12),')','')) - PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))))),PATINDEX('% %',LTRIM(RTRIM(RIGHT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),LEN(REPLACE(RIGHT(intersection, LEN(intersection)-12),')','')) - PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))))))-1) AS [pointBx]
+	, RIGHT(LTRIM(RTRIM(RIGHT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),LEN(REPLACE(RIGHT(intersection, LEN(intersection)-12),')','')) - PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))))),LEN(LTRIM(RTRIM(RIGHT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),LEN(REPLACE(RIGHT(intersection, LEN(intersection)-12),')','')) - PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')','')))))) - PATINDEX('% %',LTRIM(RTRIM(RIGHT(REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''),LEN(REPLACE(RIGHT(intersection, LEN(intersection)-12),')','')) - PATINDEX('%, %',REPLACE(RIGHT(intersection, LEN(intersection)-12),')',''))))))) AS [pointBy]
+INTO #Linestrings
 FROM MAIN
 WHERE uniq = 1 AND intersection LIKE 'LINE%'
 
 
+WITH x AS (SELECT n FROM (VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)) v(n))
+SELECT ROW_NUMBER() OVER (ORDER BY (SELECT NULL))
+FROM x ones, x tens, x hundreds, x thousands
+ORDER BY 1
 
 
 --Guesses:
@@ -133,20 +143,8 @@ WHERE uniq = 1 AND intersection LIKE 'LINE%'
 --2840
 --2881
 --5952 (idiot!)
+--5585 is the correct answer from someone else's code (part 2: 17193)
 
-
-SELECT *
-	, H1.line.STIntersection(H2.line).ToString() AS [intersection]
-	, DENSE_RANK() OVER(PARTITION BY H1.line.STIntersection(H2.line).ToString() ORDER BY H1.rownum) AS [uniq]
-	--, CASE WHEN H1.line.STIntersection(H2.line).STNumPoints() = 1 THEN H1.line.STIntersection(H2.line).STNumPoints() ELSE H1.line.STIntersection(H2.line).STNumPoints() + 1 END AS [points]
-	, CASE WHEN H1.line.STIntersection(H2.line).STNumPoints() = 1 THEN 1 ELSE H1.line.STIntersection(H2.line).STLength() + 1 END AS [points]
-FROM #HVlines H1
-	JOIN #HVlines H2 ON H1.line.STIntersects(H2.line) = 1
-WHERE H1.rownum <> H2.rownum
-	AND H1.rownum = 61
-
---Need to get unique list of points, if two lines overlap each other then they also intersect with another line, when all three hit the same point it should count as only 1 point of intersection
-SELECT * FROM #HVlines WHERE rownum IN (61,441,413,159,4,107,419,81,115,102,237,188)
 
 
 /**************************************************************************************************************************************************************/
